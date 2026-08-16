@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Runtime data — never commit results or the DB (login hash + session secret
+# live in the DB; keep it out of the repo). These live on the Coolify volume.
+*.db
+*.db-wal
+*.db-shm
+progressive_results_v2.json
+
+# Input records = real people's PII. NEVER commit these.
+your_file.json
+*_records.json
+records*.csv
+
+# Debug/error artifacts
+error_*.png
+debug_*
