@@ -1,23 +1,20 @@
 # Nixpacks build for Coolify.
 #
-# The tricky part of this app: Progressive blocks HEADLESS Chrome, and a VPS has
-# no screen. So we run Chrome in HEADFUL mode inside Xvfb (a virtual screen that
-# lives in RAM). That means:
-#   * install xvfb (the virtual display),
-#   * install Chromium WITH its system deps (playwright --with-deps),
-#   * start the app under `xvfb-run` so headful Chrome has somewhere to draw.
+# Progressive blocks HEADLESS Chrome, and a VPS has no screen — so we run Chrome
+# HEADFUL inside Xvfb (a virtual display). requirements.txt makes Nixpacks set up
+# Python + pip; the phase below adds Xvfb and the Chromium browser, then we start
+# the app under `xvfb-run`.
 #
-# requirements.txt makes Nixpacks auto-detect Python and pip-install it; the
-# phases below add what Playwright + Xvfb need on top.
-
-[phases.setup]
-aptPkgs = ["xvfb", "fonts-liberation", "ca-certificates"]
+# IMPORTANT: install xvfb with APT, not as a Nix package. The Nix name differs
+# (xorg.xvfb) and putting "xvfb"/"fonts-liberation" in the Nix setup broke the
+# nix-env step (exit 255). Chromium's own fonts/libs come from --with-deps.
 
 [phases.browsers]
-# Runs after the pip install phase; downloads Chromium and apt-installs the
-# shared libraries it needs. --with-deps is what stops the "missing .so" crashes.
 dependsOn = ["install"]
-cmds = ["python -m playwright install --with-deps chromium"]
+cmds = [
+  "apt-get update && apt-get install -y --no-install-recommends xvfb && rm -rf /var/lib/apt/lists/*",
+  "python -m playwright install --with-deps chromium",
+]
 
 [start]
 cmd = "xvfb-run -a python dashboard.py"
