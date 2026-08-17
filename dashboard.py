@@ -921,8 +921,12 @@ function setTab(name){
 
 function failedRecords(){ return DATA.filter(r=>["error","blocked","cancelled"].includes(r.status)); }
 function reason(r){
-  if(r.error) return r.error;
-  if(r.blocked_errors && r.blocked_errors.length) return r.blocked_errors.join("; ");
+  // Lead with the page state at failure (title @ url) — that's what tells you
+  // whether it was a bot-block, a blank page, or a slow load.
+  let prefix = "";
+  if(r.error_title || r.error_url) prefix = `[${r.error_title||""} @ ${r.error_url||""}] `;
+  if(r.error) return prefix + r.error;
+  if(r.blocked_errors && r.blocked_errors.length) return prefix + r.blocked_errors.join("; ");
   return r.status;
 }
 function renderErrors(){

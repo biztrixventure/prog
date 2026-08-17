@@ -773,6 +773,14 @@ def run_one_record(entry, proxy=None, headless=False):
                 process_entry(page, entry, result)
             except Exception as e:
                 print(f"Error processing entry {first_name} {last_name}: {str(e)}")
+                # Capture WHAT the page was showing when it failed - the title and
+                # URL reveal a bot-block page vs a slow load vs a blank, which you
+                # cannot see on a windowless (Xvfb) server.
+                try:
+                    result["error_url"] = page.url
+                    result["error_title"] = page.title()
+                except Exception:
+                    pass
                 result["error"] = str(e)
             finally:
                 try:
