@@ -1165,9 +1165,16 @@ LOGIN_PAGE = r"""<!doctype html>
 
 
 # Seed credentials + session secret on import so the guard works immediately.
-_init_auth()
+# Loud, flushed logging so a container startup problem is visible (and can't
+# silently 502). If auth init fails, log it but still let the server bind.
+print(f"[startup] init auth, DB_PATH={m.DB_PATH}", flush=True)
+try:
+    _init_auth()
+    print("[startup] auth ready", flush=True)
+except Exception as _e:
+    print(f"[startup] AUTH INIT FAILED: {_e!r}", flush=True)
 
 
 if __name__ == "__main__":
-    print(f"Dashboard on {HOST}:{PORT}  (default login: admin / admin)")
+    print(f"[startup] Dashboard binding {HOST}:{PORT} (login: admin / admin)", flush=True)
     app.run(host=HOST, port=PORT, threaded=True)

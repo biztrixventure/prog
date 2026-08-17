@@ -607,6 +607,11 @@ def _rkey(d):
 def _db():
     global _db_conn
     if _db_conn is None:
+        # Make sure the DB's folder exists (e.g. the /data volume mount) so the
+        # very first connect can't fail with "unable to open database file".
+        _dir = os.path.dirname(DB_PATH)
+        if _dir:
+            os.makedirs(_dir, exist_ok=True)
         _db_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         # WAL = concurrent readers while a worker writes; big throughput win.
         _db_conn.execute("PRAGMA journal_mode=WAL")
