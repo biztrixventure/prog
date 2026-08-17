@@ -16,5 +16,10 @@ cmds = [
   "python -m playwright install --with-deps chromium",
 ]
 
+# Start Xvfb in the BACKGROUND (with an explicit x24 depth or it errors
+# "Invalid screen configuration") and exec Python as the container's main
+# process. This is more reliable than `xvfb-run`, which in this container left
+# Xvfb running but the Python process dead -> the app 502'd with no logs.
+# Python binds the port even if Xvfb hiccups; DISPLAY=:99 lets Chrome draw.
 [start]
-cmd = "xvfb-run -a python dashboard.py"
+cmd = "sh -c 'Xvfb :99 -screen 0 1280x1024x24 & export DISPLAY=:99 && exec python dashboard.py'"
