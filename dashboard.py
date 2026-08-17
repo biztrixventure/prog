@@ -221,8 +221,12 @@ def _placeholder(entry, status="pending"):
     }
 
 
-def run_job(entries, config):
-    """Process all not-yet-done entries with a pool of parallel browsers."""
+def run_job(entries, config, reprocess=frozenset()):
+    """Process all not-yet-done entries with a pool of parallel browsers.
+
+    `reprocess` is a set of statuses that should be re-run even though they are
+    normally 'done' (e.g. {'no_vehicles'} to retry those) - lets the user retry
+    no-vehicle records that a flaky proxy may have gotten wrong."""
     # Push the UI toggles into the automation module.
     m.SAVE_BANDWIDTH = config["save_bandwidth"]
     proxy_list = m.parse_proxies(m.PROXIES) if config["use_proxies"] else []
@@ -236,7 +240,7 @@ def run_job(entries, config):
         # Per-record DB lookup (indexed) rather than loading the whole DB into
         # memory - keeps resume flat even with millions of stored records.
         prev = m.get_result(entry)
-        if prev and prev.get("status") in DONE:
+        if prev and prev.get("status") in DONE and prev.get("status") not in reprocess:
             slots[i] = prev
             skipped += 1
         else:
@@ -338,24 +342,8 @@ def _config_from_form():
     }
 
 
-@app.route("/retry", methods=["POST"])
-def retry():
-    """Re-run only the failed/blocked records, reusing the data already saved.
-
-    We hand run_job the FULL record set (rebuilt from the results file) so the
-    successful ones are preserved and skipped, and only the failed ones run
-    again - handy when a bad proxy IP errored a few records."""
-    with JOB_LOCK:
-        if JOB["running"]:
-            return jsonify(error="A run is already in progress."), 409
-        results = list(JOB["results"])
-    if not results:
-        results = m.load_all()
-    failed = [r for r in results if r.get("status") in FAILED_STATUSES]
-    if not failed:
-        return jsonify(error="No failed records to retry."), 400
-
-    entries = [{
+def _entry_from_result(r):
+    return {
         "first_name": r.get("first_name", ""),
         "middle_initial": r.get("middle_initial", ""),
         "last_name": r.get("last_name", ""),
@@ -364,13 +352,42 @@ def retry():
         "address": r.get("address", ""),
         "zip": r.get("zip", ""),
         "dob": r.get("dob", ""),
-    } for r in results]
+    }
 
+
+@app.route("/retry", methods=["POST"])
+def retry():
+    """Re-run a subset of records, reusing the data already saved.
+
+    mode=failed (default) re-runs error/blocked/cancelled records.
+    mode=no_vehicles re-runs records that came back 'no_vehicles' - force-
+    reprocessed even though that status is normally 'done'."""
+    mode = request.form.get("mode", "failed")
+    with JOB_LOCK:
+        if JOB["running"]:
+            return jsonify(error="A run is already in progress."), 409
+        results = list(JOB["results"])
+    if not results:
+        results = m.load_all()
+
+    if mode == "no_vehicles":
+        target = [r for r in results if r.get("status") == "no_vehicles"]
+        reprocess = frozenset({"no_vehicles"})
+        label = "no-vehicles"
+    else:
+        target = [r for r in results if r.get("status") in FAILED_STATUSES]
+        reprocess = frozenset()
+        label = "failed"
+    if not target:
+        return jsonify(error=f"No {label} records to retry."), 400
+
+    entries = [_entry_from_result(r) for r in target]
     m.PROXIES = request.form.get("proxies", m.PROXIES)
     with JOB_LOCK:
-        JOB["input_name"] = f"retry ({len(failed)} failed)"
-    threading.Thread(target=run_job, args=(entries, _config_from_form()), daemon=True).start()
-    return jsonify(ok=True, retrying=len(failed))
+        JOB["input_name"] = f"retry {label} ({len(target)})"
+    threading.Thread(target=run_job, args=(entries, _config_from_form(), reprocess),
+                     daemon=True).start()
+    return jsonify(ok=True, retrying=len(target))
 
 
 @app.route("/stop", methods=["POST"])
@@ -835,7 +852,10 @@ PAGE = r"""<!doctype html>
     </div>
 
     <div id="tab-status" style="display:none">
-      <div class="toolbar"><span class="spacer"></span>
+      <div class="toolbar">
+        <span class="note">Re-run the "no vehicles" records &mdash; useful when a slow/blocked proxy made some come back empty.</span>
+        <span class="spacer"></span>
+        <button class="ghost dl" id="retryNoVehBtn">Retry no-vehicles</button>
         <button class="ghost dl" id="dlStatusCsv">Download CSV</button></div>
       <div class="tablewrap"><table><thead><tr><th>Status</th><th class="num">Count</th><th class="num">% of total</th><th></th></tr></thead>
         <tbody id="statusRows"></tbody></table></div>
@@ -1025,8 +1045,9 @@ function render(){
   else if(TAB==="year") renderYear();
 }
 
-async function retryFailed(){
+async function retry(mode){
   const fd=new FormData();
+  fd.append("mode",mode);
   fd.append("proxies",$("proxies").value);
   fd.append("use_proxies",$("use_proxies").checked);
   fd.append("save_bandwidth",$("save_bandwidth").checked);
@@ -1036,6 +1057,8 @@ async function retryFailed(){
   const j=await r.json();
   if(!r.ok){ alert(j.error||"Retry failed"); return; }
 }
+function retryFailed(){ return retry("failed"); }
+function retryNoVeh(){ return retry("no_vehicles"); }
 function dlErrCsv(){ download("errors.csv", recordsCsv(failedRecords()), "text/csv"); }
 
 async function saveCreds(){
@@ -1104,6 +1127,7 @@ async function poll(){
     $("stop").disabled=!s.running;
     $("clear").disabled=s.running;
     $("retryBtn").disabled=s.running;
+    $("retryNoVehBtn").disabled=s.running;
     DATA=s.results||[];
     render();
   } catch(e){ /* not ready */ }
@@ -1121,6 +1145,7 @@ $("dlStatusCsv").onclick=dlStatusCsv;
 $("dlVehCsv").onclick=dlVehCsv;
 $("dlYearCsv").onclick=dlYearCsv;
 $("retryBtn").onclick=retryFailed;
+$("retryNoVehBtn").onclick=retryNoVeh;
 $("dlErrCsv").onclick=dlErrCsv;
 $("settingsToggle").onclick=()=>{ const p=$("settingsPanel"); p.style.display=p.style.display==="none"?"":"none"; };
 $("saveCreds").onclick=saveCreds;
