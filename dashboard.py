@@ -438,6 +438,21 @@ def check_proxies():
     return jsonify(total=len(lines), alive=len(alive), working="\n".join(alive))
 
 
+@app.route("/proxies", methods=["GET"])
+def get_proxies():
+    """Return the saved proxy list so the box can pre-fill on page load."""
+    return jsonify(proxies=m.get_setting("proxies", ""))
+
+
+@app.route("/proxies", methods=["POST"])
+def save_proxies():
+    """Persist the pasted proxy list so it survives restarts and reruns."""
+    value = request.form.get("proxies", "")
+    m.set_setting("proxies", value)
+    m.PROXIES = value
+    return jsonify(ok=True, count=len([ln for ln in value.splitlines() if ln.strip()]))
+
+
 @app.route("/reset", methods=["POST"])
 def reset():
     """Clear the saved results so the next run processes every record again."""
@@ -758,7 +773,10 @@ PAGE = r"""<!doctype html>
         <label>One per line &mdash; host:port:user:pass or user:pass@host:port</label>
         <textarea id="proxies" placeholder="user:pass_country-US@thehub.proxy-cheap.com:8080"></textarea>
         <label class="check"><input type="checkbox" id="use_proxies"><span>Use proxies<span class="sub">Route each record through a proxy</span></span></label>
-        <div class="btns"><button class="ghost" id="check">Check proxies &mdash; keep only working</button></div>
+        <div class="btns">
+          <button class="ghost" id="saveProxies">Save proxies</button>
+          <button class="ghost" id="check">Check &mdash; keep working</button>
+        </div>
         <div class="hint" id="checkmsg"></div>
       </div>
 
@@ -913,6 +931,17 @@ async function start(){
   if(!r.ok){ const e=await r.json(); alert(e.error||"Start failed"); }
 }
 async function stop(){ await fetch("/stop",{method:"POST"}); }
+
+async function saveProxies(){
+  const fd=new FormData(); fd.append("proxies",$("proxies").value);
+  const r=await fetch("/proxies",{method:"POST",body:fd}); const j=await r.json();
+  $("checkmsg").textContent = r.ok ? `Saved ${j.count} proxy line(s).` : "Save failed";
+}
+async function loadSavedProxies(){
+  try{ const j=await(await fetch("/proxies")).json();
+    if(j.proxies && !$("proxies").value.trim()) $("proxies").value=j.proxies;
+  }catch(e){}
+}
 async function checkProxies(){
   const btn=$("check"); btn.disabled=true; $("checkmsg").textContent="Testing proxies... (up to ~10s)";
   try{
@@ -1138,6 +1167,8 @@ $("start").onclick=start;
 $("stop").onclick=stop;
 $("clear").onclick=clearResults;
 $("check").onclick=checkProxies;
+$("saveProxies").onclick=saveProxies;
+loadSavedProxies();
 $("dlfile").onclick=()=>{ window.location="/download"; };
 $("dlRecCsv").onclick=dlRecCsv;
 $("dlRecJson").onclick=dlRecJson;
@@ -1223,6 +1254,10 @@ LOGIN_PAGE = r"""<!doctype html>
 print(f"[startup] init auth, DB_PATH={m.DB_PATH}", flush=True)
 try:
     _init_auth()
+    # Reuse the last saved proxy list so it persists across restarts.
+    _saved_proxies = m.get_setting("proxies")
+    if _saved_proxies:
+        m.PROXIES = _saved_proxies
     print("[startup] auth ready", flush=True)
 except Exception as _e:
     print(f"[startup] AUTH INIT FAILED: {_e!r}", flush=True)
