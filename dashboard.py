@@ -518,7 +518,9 @@ def index():
 
 
 PAGE = r"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Progressive Automation Dashboard</title>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Progressive Automation Dashboard</title>
 <style>
   :root{
     --bg:#0b0e14; --bg-elev:#0e121b; --surface:#11151f; --surface-2:#161b28; --surface-3:#1b2130;
@@ -648,8 +650,9 @@ PAGE = r"""<!doctype html>
   .note{ font-size:12px; color:var(--ink-faint); }
 
   /* Tables */
-  .tablewrap{ border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--surface); box-shadow:var(--shadow); }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .tablewrap{ border:1px solid var(--line); border-radius:var(--radius); overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--surface); box-shadow:var(--shadow); }
+  table{ width:100%; border-collapse:collapse; font-size:13px; min-width:560px; }
   thead th{ position:sticky; top:0; background:var(--surface-3); color:var(--ink-faint); z-index:1;
     font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
     text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
@@ -677,12 +680,31 @@ PAGE = r"""<!doctype html>
   #settingsToggle{ width:100%; text-align:left; }
   #settingsPanel{ margin-top:10px; padding:14px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); }
 
-  /* Responsive */
+  /* Responsive — tablet: stack the rail above the results */
   @media (max-width:900px){
-    .app{ grid-template-columns:1fr; height:auto; }
-    .rail{ border-right:0; border-bottom:1px solid var(--line); }
-    .kpis{ grid-template-columns:repeat(2,1fr); }
+    .app{ grid-template-columns:1fr; height:auto; min-height:calc(100vh - 60px); }
+    .rail{ border-right:0; border-bottom:1px solid var(--line); overflow:visible; }
+    .main{ overflow:visible; }
+    .kpis{ grid-template-columns:repeat(3,1fr); gap:10px; }
     .settings-bar{ position:static; }
+    .toolbar select,.toolbar input[type=text]{ width:100%; min-width:0; }
+    .toolbar .spacer{ display:none; }
+  }
+  /* Phone */
+  @media (max-width:560px){
+    .topbar{ height:auto; flex-direction:column; align-items:stretch; gap:10px; padding:12px 16px; }
+    .topbar-actions{ justify-content:stretch; }
+    .topbar-actions .dl{ flex:1; }
+    .rail-inner{ padding:4px 14px 0; }
+    .main{ padding:16px 14px 32px; }
+    .kpis{ grid-template-columns:repeat(2,1fr); }
+    .kpi b{ font-size:22px; }
+    .btns{ flex-wrap:wrap; }
+    .btns > button{ min-width:calc(50% - 5px); }
+    .tabs{ gap:0; }
+    .tab{ padding:10px 12px; font-size:12px; }
+    .toolbar{ gap:8px; }
+    .toolbar .dl{ flex:1; }
   }
   @media (prefers-reduced-motion:reduce){ *{ transition:none!important; } }
 </style></head>
@@ -1110,7 +1132,9 @@ poll();
 
 
 LOGIN_PAGE = r"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Sign in</title>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
 <style>
   :root{ --accent:#6d8bff; --accent-hi:#88a0ff; --line:#232a3a; color-scheme:dark; }
   *{ box-sizing:border-box; }
