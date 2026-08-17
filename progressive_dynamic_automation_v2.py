@@ -390,7 +390,7 @@ def fill_masked_date(page, selector, dob):
 
 def fill_address(page, address, zip_code, result):
     """Fill street / unit / city, using the ZIP lookup to supply the city."""
-    page.locator(F_STREET).wait_for(timeout=60000)
+    page.locator(F_STREET).wait_for(timeout=120000)
 
     street, unit = split_unit(address)
     print(f"Filling Address: {street}" + (f"  |  Unit: {unit}" if unit else ""))
@@ -508,6 +508,14 @@ def submit_address_and_read_popup(page, result):
 
 def process_entry(page, entry, result):
     """Run one record end-to-end on a page belonging to a freshly launched browser."""
+    # Residential proxies (esp. when the entry node is far, e.g. Europe -> US)
+    # add a lot of latency, and Progressive's flow does several redirects. Give
+    # every navigation/wait generous time so a slow-but-working proxy finishes
+    # instead of timing out at the default. Datacenter/no-proxy IPs reach the
+    # vehicle step but Progressive returns no vehicle data - a residential proxy
+    # is required for real results.
+    page.set_default_timeout(120000)
+    page.set_default_navigation_timeout(120000)
     first_name = entry.get('first_name', '')
     middle_initial = entry.get('middle_initial', '')
     last_name = entry.get('last_name', '')
@@ -533,7 +541,7 @@ def process_entry(page, entry, result):
 
     # 2. NameEdit Page
     print("Filling Personal Details...")
-    page.wait_for_selector('input[id="NameEdit_embedded_questions_list_FirstName"]', timeout=60000)
+    page.wait_for_selector('input[id="NameEdit_embedded_questions_list_FirstName"]', timeout=120000)
     page.fill('input[id="NameEdit_embedded_questions_list_FirstName"]', first_name)
     if middle_initial:
         page.fill('input[id="NameEdit_embedded_questions_list_MiddleInitial"]', middle_initial)
